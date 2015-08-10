@@ -13,9 +13,10 @@ def getFPS(mkvINFO):
 
 def getVT(mkvINFO):
     vt = -1
-    vtPattern = re.compile(r'\d\)\n\W\s+\+ Track UID: \d+\n\W\s+\+ Track type: video')
+    vtPattern = re.compile(r'\d\)\n\W\s+\+\s+Track UID:(.*)Track type: video', re.DOTALL)
     vt = vtPattern.search(mkvINFO)
     vtPattern = re.compile(r'\d')
+    if vt == null:
     vt = vtPattern.search(vt.group())
     return(vt.group())
 
