@@ -106,7 +106,7 @@ def extractAudio(file):
         mediaInfo = getAudioStats()
         if (mediaInfo[0] == 'Constant'):
             ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -b:a ' + mediaInfo[1] + ' \"' + aacFile + '\"'
-        elif (mediaInfo[0] is 'AAC' and mediaInfo[2] is 2):
+        elif (mediaInfo[0] == 'AAC' and mediaInfo[2] == '2'):
             ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -c:a copy \"' + aacFile + '\"'
         else:
             ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -flags +qscale -global_quality 5 -cutoff 17k \"' + aacFile + '\"'
