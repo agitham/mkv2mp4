@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import sys, os, subprocess, re
+import sys, os, subprocess, re, string
 # from subprocess import Popen, PIPE
 file = sys.argv[1]
 
@@ -22,7 +22,7 @@ def getFPS(mkvINFO):
             fps = fps.group()
     return(fps)
 
-def getVT(mkvINFO):
+def getTracks(mkvINFO):
     vt = -1
     vtPattern = re.compile(r'Track ID \d+: video')
     vt = vtPattern.search(mkvINFO)
@@ -41,7 +41,7 @@ def getVideoStats(file):
     mkvinfo_args = ['mkvmerge -i \"' + file + '\"']
     mkvINFO = subprocess.check_output(mkvinfo_args, shell=True)
     print(mkvINFO)
-    vt = getVT(mkvINFO)
+    vt = getTracks(mkvINFO)
     return(vt,fps)
 
 def extractVideo(file,vt):
@@ -59,49 +59,72 @@ def extractVideo(file,vt):
 def getAudioStats():
     mediaInfoArgs = 'mediainfo \"' + file + '\"'
     mediaInfo = subprocess.check_output(mediaInfoArgs, shell=True)
-    pattern = re.compile(r'Bit rate mode\s+:\s+\w+')
-    brm = pattern.search(mediaInfo)
-    if brm == None:
-        brm = -1
+    pattern = re.compile(r'Audio\nID(.*)',re.DOTALL)
+    audioStats = pattern.search(mediaInfo)
+    if audioStats is None:
+        print('Audio stream unknown')
+        brm = 'NA'
+        br = 'NA'
     else:
-        pattern = re.compile(r':\w+')
-        brm = brm.group().rsplit(None, 1)[-1]
-    pattern = re.compile(r'Bit rate mode\s+:\s+\w+\nBit rate\s+:\s+\d+\s+\w+')
-    br = pattern.search(mediaInfo)
-    if br == None:
-        br = -1
-    else:
-        pattern = re.compile(r'\d+\s+\w')
-        br = pattern.search(br.group())
-        br = br.group().replace(" ", "")
-    return(brm,br)
+        pattern = re.compile(r'Bit rate mode\s+:\s+\w+')
+        brm = pattern.search(audioStats.group())
+        if brm is None:
+            pattern = re.compile(r'Format\s+:\s+\w+')
+            codec = pattern.search(audioStats.group())
+            if codec is not None:
+                brm = codec.group()[-3:]
+            else:
+                brm = 'NA'
+            pattern = re.compile(r'Channel(.*)')
+            aChannels = pattern.search(audioStats.group())
+            if aChannels is not None:
+                all=string.maketrans('','')
+                nodigs=all.translate(all, string.digits)
+                aChannels = aChannels.group().translate(all, nodigs)
+            else:
+                aChannels = -1
+        else:
+            pattern = re.compile(r':\w+')
+            brm = brm.group().rsplit(None, 1)[-1]
+        pattern = re.compile(r'Bit rate mode\s+:\s+\w+\nBit rate\s+:\s+\d+\s+\w+')
+        br = pattern.search(mediaInfo)
+        if br == None:
+            br = -1
+        else:
+            pattern = re.compile(r'\d+\s+\w')
+            br = pattern.search(br.group())
+            br = br.group().replace(" ", "")
+    return(brm,br,aChannels)
 
 
 def extractAudio(file):
-    mp4File = os.path.splitext(file)[0] + ' audioOnly.aac'
-    if os.path.isfile(mp4File):
-        print('Skipping audio conversion, ' + mp4File + ' already exists')
+    aacFile = os.path.splitext(file)[0] + ' audioOnly.aac'
+    if os.path.isfile(aacFile):
+        print('Skipping audio conversion, ' + aacFile + ' already exists')
         audioExtract = 0
     else:
         mediaInfo = getAudioStats()
         if (mediaInfo[0] == 'Constant'):
-            ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -b:a ' + mediaInfo[1] + ' \"' + mp4File + '\"'
+            ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -b:a ' + mediaInfo[1] + ' \"' + aacFile + '\"'
+        elif (mediaInfo[0] is 'AAC' and mediaInfo[2] is 2):
+            ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -c:a copy \"' + aacFile + '\"'
         else:
-            ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -flags +qscale -global_quality 5 -cutoff 17k \"' + mp4File + '\"'
+            ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -flags +qscale -global_quality 5 -cutoff 17k \"' + aacFile + '\"'
+#ffmpegArgs = 'ffmpeg -i \"' + file + '\" -vn -ac 2 -c:a libfdk_aac -flags +qscale -global_quality 5 -cutoff 17k \"' + aacFile + '\"'
         print(ffmpegArgs)
         audioExtract = subprocess.call(ffmpegArgs, shell=True)
     return(audioExtract)
 
 def rebuildFile(file,fps):
     h264File = os.path.splitext(file)[0] + '.264'
-    mp4File = os.path.splitext(file)[0] + ' audioOnly.aac'
+    aacFile = os.path.splitext(file)[0] + ' audioOnly.aac'
     newFile = os.path.splitext(file)[0] + '.mp4'
-    mboxArgs = 'MP4Box -add \"' + h264File + '\":fps=' + fps + ' -add \"' + mp4File + '\" \"' + newFile + '\"'
+    mboxArgs = 'MP4Box -add \"' + h264File + '\":fps=' + fps + ' -add \"' + aacFile + '\" \"' + newFile + '\"'
     print(mboxArgs)
     MP4Merge = subprocess.call(mboxArgs, shell=True)
     if (MP4Merge == 0):
         subprocess.call('rm -v \"' + h264File + '\"', shell=True)
-        subprocess.call('rm -v \"' + mp4File + '\"', shell=True)
+        subprocess.call('rm -v \"' + aacFile + '\"', shell=True)
         subprocess.call('rm -v \"' + file + '\"', shell=True)
     return(MP4Merge)
 
