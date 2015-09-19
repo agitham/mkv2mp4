@@ -61,6 +61,7 @@ def getAudioStats():
     mediaInfo = subprocess.check_output(mediaInfoArgs, shell=True)
     pattern = re.compile(r'Audio\nID(.*)',re.DOTALL)
     audioStats = pattern.search(mediaInfo)
+    aChannels = -1
     if audioStats is None:
         print('Audio stream unknown')
         brm = 'NA'
@@ -68,13 +69,14 @@ def getAudioStats():
     else:
         pattern = re.compile(r'Bit rate mode\s+:\s+\w+')
         brm = pattern.search(audioStats.group())
+        pattern = re.compile(r'Format\s+:\s+\w+')
+        codec = pattern.search(audioStats.group())
+        if codec is not None:
+            brm = codec.group().rsplit(None,1)[-1]
+        else:
+            brm = 'NA'
         if brm is None:
-            pattern = re.compile(r'Format\s+:\s+\w+')
-            codec = pattern.search(audioStats.group())
-            if codec is not None:
-                brm = codec.group()[-3:]
-            else:
-                brm = 'NA'
+            
             pattern = re.compile(r'Channel(.*)')
             aChannels = pattern.search(audioStats.group())
             if aChannels is not None:
@@ -86,19 +88,20 @@ def getAudioStats():
         else:
             pattern = re.compile(r':\w+')
             brm = brm.group().rsplit(None, 1)[-1]
-        pattern = re.compile(r'Bit rate mode\s+:\s+\w+\nBit rate\s+:\s+\d+\s+\w+')
+        pattern = re.compile(r'Bit rate mode\s+:\s+\w+\nBit rate(.*)')
         br = pattern.search(mediaInfo)
         if br == None:
             br = -1
         else:
-            pattern = re.compile(r'\d+\s+\w')
-            br = pattern.search(br.group())
             br = br.group().replace(" ", "")
+            pattern = re.compile(r'\d+\w')
+            br = pattern.search(br)
+            br = br.group()
     return(brm,br,aChannels)
 
 
 def extractAudio(file):
-    aacFile = os.path.splitext(file)[0] + ' audioOnly.aac'
+    aacFile = os.path.splitext(file)[0] + '.aac'
     if os.path.isfile(aacFile):
         print('Skipping audio conversion, ' + aacFile + ' already exists')
         audioExtract = 0
@@ -117,7 +120,7 @@ def extractAudio(file):
 
 def rebuildFile(file,fps):
     h264File = os.path.splitext(file)[0] + '.264'
-    aacFile = os.path.splitext(file)[0] + ' audioOnly.aac'
+    aacFile = os.path.splitext(file)[0] + '.aac'
     newFile = os.path.splitext(file)[0] + '.mp4'
     mboxArgs = 'MP4Box -add \"' + h264File + '\":fps=' + fps + ' -add \"' + aacFile + '\" \"' + newFile + '\"'
     print(mboxArgs)
